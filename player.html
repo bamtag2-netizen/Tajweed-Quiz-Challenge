@@ -20,23 +20,21 @@
 </head>
 <body>
 
-<!-- شاشة تسجيل الدخول للاعب -->
 <div class="player-container" id="login-zone">
     <h2>انضم للمسابقة التفاعلية 🎮</h2>
+    <!-- تم ربط الأحداث وإيقاظها عالمياً للتفاعل الفوري -->
     <input type="number" id="room-input" placeholder="أدخل رمز الغرفة PIN">
     <input type="text" id="name-input" placeholder="أدخل اسمك المستعار">
-    <button class="join-btn" id="join-room-btn">دخول الغرفة</button>
+    <button class="join-btn" onclick="window.connectToRoom()">دخول الغرفة</button>
 </div>
 
-<!-- لوحة أزرار الألوان الصامتة مثل كاهوت تماماً للطلاب -->
 <div class="pad-grid hidden" id="game-pad">
-    <button class="pad-btn red-btn" id="btn-opt-0"></button>
-    <button class="pad-btn blue-btn" id="btn-opt-1"></button>
-    <button class="pad-btn yellow-btn" id="btn-opt-2"></button>
-    <button class="pad-btn green-btn" id="btn-opt-3"></button>
+    <button class="pad-btn red-btn" onclick="window.sendAnswer(0)"></button>
+    <button class="pad-btn blue-btn" onclick="window.sendAnswer(1)"></button>
+    <button class="pad-btn yellow-btn" onclick="window.sendAnswer(2)"></button>
+    <button class="pad-btn green-btn" onclick="window.sendAnswer(3)"></button>
 </div>
 
-<!-- شاشة انتظار تبديل الأسئلة -->
 <div class="player-container hidden" id="status-zone">
     <div class="status-msg" id="status-text">انتظر المضيف لتجهيز السؤال... ⏳</div>
 </div>
@@ -54,14 +52,8 @@ let currentServerQIdx = -1;
 let registeredPIN = "";
 let playerName = "";
 
-// ربط أحداث النقر مباشرة لضمان أعلى دقة استجابة في المتصفحات
-document.getElementById('join-room-btn').addEventListener('click', connectToRoom);
-document.getElementById('btn-opt-0').addEventListener('click', () => sendAnswer(0));
-document.getElementById('btn-opt-1').addEventListener('click', () => sendAnswer(1));
-document.getElementById('btn-opt-2').addEventListener('click', () => sendAnswer(2));
-document.getElementById('btn-opt-3').addEventListener('click', () => sendAnswer(3));
-
-function connectToRoom() {
+// تصدير دالة الاتصال لنطاق النافذة العالمي لتخطي جدار الـ Module وحل مشكلة عدم الاستجابة
+window.connectToRoom = function() {
     registeredPIN = document.getElementById('room-input').value;
     playerName = document.getElementById('name-input').value;
 
@@ -98,7 +90,7 @@ function listenToGameStatus() {
     });
 }
 
-function sendAnswer(buttonIndex) {
+window.sendAnswer = function(buttonIndex) {
     const buttons = document.querySelectorAll('.pad-btn');
     buttons.forEach(btn => btn.disabled = true);
 
