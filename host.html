@@ -18,21 +18,20 @@
         .control-btn { background: var(--primary); color: white; border: none; padding: 15px 40px; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 30px; }
         .control-btn:hover { background: #34495e; }
         .hidden { display: none; }
-        .player-tag { display: inline-block; background: #efvh; padding: 8px 15px; margin: 5px; border-radius: 20px; font-weight: bold; background: #dfe4ea; color: #2f3542; }
+        .player-tag { display: inline-block; padding: 8px 15px; margin: 5px; border-radius: 20px; font-weight: bold; background: #dfe4ea; color: #2f3542; }
         .leaderboard-list { text-align: right; max-width: 400px; margin: 20px auto; font-size: 20px; line-height: 2; }
     </style>
-    <!-- استدعاء مكتبات Firebase سحابياً وبدقة -->
+    <!-- استدعاء مكتبات Firebase سحابياً بشكل متوافق -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
 </head>
 <body>
 
 <div class="container">
-    <!-- شاشة الانتظار ودخول اللاعبين -->
     <div id="lobby-screen">
         <h1>مسابقة التجويد التفاعلية (كاهوت)</h1>
         <p style="font-size: 18px; color: #7f8c8d;">أطلب من المتسابقين إدخال الرمز التالي في هواتفهم:</p>
-        <div class="room-pin">رمز الغرفة: <span id="pin-number">جاري التوليد...</span></div>
+        <div class="room-pin">رمز الغرفة: <span id="pin-number">جاري الاتصال...</span></div>
         <div style="margin-top: 20px;">
             <h3>اللاعبون المنضمون حالياً (<span id="players-count">0</span>):</h3>
             <div id="players-list"></div>
@@ -40,7 +39,6 @@
         <button class="control-btn" onclick="startBroadcasting()">ابدأ عرض المسابقة 🚀</button>
     </div>
 
-    <!-- شاشة اللعب والعداد الكبير للجمهور -->
     <div id="game-screen" class="hidden">
         <div class="timer-big" id="countdown">20</div>
         <div class="question-box" id="question-holder">جاري تحميل السؤال...</div>
@@ -48,7 +46,6 @@
         <button class="control-btn" id="next-btn" onclick="nextQuestion()">السؤال التالي ⬅️</button>
     </div>
 
-    <!-- شاشة لوحة الصدارة وجدول الترتيب النهائي -->
     <div id="leaderboard-screen" class="hidden">
         <h1>🏆 لوحة الصدارة النهائية 🏆</h1>
         <div class="leaderboard-list" id="leaderboard-content"></div>
@@ -57,13 +54,12 @@
 </div>
 
 <script>
-// إعدادات مشروعك وسيرفرك الشخصي بدقة عالية
-const firebaseConfig = { databaseURL: "https://tajweed-quiz-challenge-default-rtdb.firebaseio.com/" };
+const firebaseConfig = { databaseURL: "https://firebaseio.com" };
+// إصلاح الحروف الكبيرة للـ SDK للتوصيل الآني الصحيح
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const roomPIN = "2026"; // رمز الغرفة ثابت هنا لتسهيل ربط وتوجيه كل الهواتف
-document.getElementById('pin-number').innerText = roomPIN;
+const roomPIN = "2026"; 
 
 const questionsBank = [
     { q: "عدد مراحل نزول القرءان الكريم هي:", options: ["مرحلة واحدة", "مرحلتين", "ثلاثة مراحل", "أربعة مراحل"], correct: 2 },
@@ -78,7 +74,9 @@ let timeLeft = 20;
 let timer = null;
 let currentQuestionActive = false;
 
-// الاستماع للاعبين الجدد الذين يسجلون دخولهم
+// إظهار الرقم بمجرد تحميل الكود للتأكيد
+document.getElementById('pin-number').innerText = roomPIN;
+
 db.ref(`rooms/${roomPIN}/players`).on('value', (snapshot) => {
     const playersData = snapshot.val() || {};
     const listHolder = document.getElementById('players-list');
@@ -105,7 +103,6 @@ function nextQuestion() {
     }
 
     currentQuestionActive = true;
-    // تحديث رقم السؤال النشط على السيرفر لتوجيه شاشات الطلاب تلقائياً وايقاظ الأزرار
     db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "active" });
 
     const currentQ = questionsBank[currentIndex];
@@ -133,16 +130,13 @@ function nextQuestion() {
     }, 1000);
 }
 
-// رصد وحساب إجابات المتسابقين بدقة بالاعتماد على السرعة
 db.ref(`rooms/${roomPIN}/answers`).on('child_added', (snapshot) => {
     if (!currentQuestionActive) return;
     const ans = snapshot.val();
     
-    // فحص إذا كانت الإجابة المبعوثة مخصصة للسؤال الحالي ولم تحتسب بعد
     if (ans.qIdx === currentIndex) {
         const correctAns = questionsBank[currentIndex].correct;
         if (ans.chosen === correctAns) {
-            // معادلة كاهوت لحساب السرعة: من يجاوب أسرع ينال نقاطاً أكثر (الحد الأقصى 1000 نقطة)
             const speedBonus = Math.round((timeLeft / 20) * 500);
             const scoreGained = 500 + speedBonus;
             
