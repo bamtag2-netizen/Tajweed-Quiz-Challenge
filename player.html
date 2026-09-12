@@ -17,8 +17,6 @@
         .hidden { display: none !important; }
         .status-msg { font-size: 24px; font-weight: bold; color: #f1c40f; }
     </style>
-    <script src="https://gstatic.com"></script>
-    <script src="https://gstatic.com"></script>
 </head>
 <body>
 
@@ -40,17 +38,20 @@
     <div class="status-msg" id="status-text">انتظر المضيف لتجهيز السؤال... ⏳</div>
 </div>
 
-<script>
+<script type="module">
+import { initializeApp } from "https://gstatic.com";
+import { getDatabase, ref, set, push, onValue } from "https://gstatic.com";
+
 const firebaseConfig = { databaseURL: "https://firebaseio.com" };
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 let myPlayerId = "p_" + Math.random().toString(36).substr(2, 9);
 let currentServerQIdx = -1;
 let registeredPIN = "";
 let playerName = "";
 
-function connectToRoom() {
+window.connectToRoom = function() {
     registeredPIN = document.getElementById('room-input').value;
     playerName = document.getElementById('name-input').value;
 
@@ -60,7 +61,7 @@ function connectToRoom() {
     }
     if(!playerName) { alert("من فضلك أدخل اسمك المستعار!"); return; }
 
-    db.ref(`rooms/${registeredPIN}/players/${myPlayerId}`).set({ name: playerName, score: 0 });
+    set(ref(db, `rooms/${registeredPIN}/players/${myPlayerId}`), { name: playerName, score: 0 });
 
     document.getElementById('login-zone').classList.add('hidden');
     document.getElementById('status-zone').classList.remove('hidden');
@@ -69,7 +70,7 @@ function connectToRoom() {
 }
 
 function listenToGameStatus() {
-    db.ref(`rooms/${registeredPIN}/status`).on('value', (snapshot) => {
+    onValue(ref(db, `rooms/${registeredPIN}/status`), (snapshot) => {
         const status = snapshot.val();
         if (!status) return;
 
@@ -87,7 +88,7 @@ function listenToGameStatus() {
     });
 }
 
-function sendAnswer(buttonIndex) {
+window.sendAnswer = function(buttonIndex) {
     const buttons = document.querySelectorAll('.pad-btn');
     buttons.forEach(btn => btn.disabled = true);
 
@@ -95,10 +96,11 @@ function sendAnswer(buttonIndex) {
     document.getElementById('status-zone').classList.remove('hidden');
     document.getElementById('status-text').innerText = "تم إرسال إجابتك بنجاح! ⚡";
 
-    db.ref(`rooms/${registeredPIN}/answers`).push({
+    push(ref(db, `rooms/${registeredPIN}/answers`), {
         pId: myPlayerId,
         qIdx: currentServerQIdx,
-        chosen: buttonIndex
+        chosen: buttonIndex,
+        processed: false
     });
 }
 </script>
