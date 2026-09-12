@@ -21,11 +21,12 @@
         .player-tag { display: inline-block; padding: 8px 15px; margin: 5px; border-radius: 20px; font-weight: bold; background: #dfe4ea; color: #2f3542; }
         .leaderboard-list { text-align: right; max-width: 400px; margin: 20px auto; font-size: 20px; line-height: 2; }
     </style>
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
 </head>
 <body>
 
 <div class="container">
-    <!-- شاشة اللوبي والانتظار -->
     <div id="lobby-screen">
         <h1>مسابقة التجويد التفاعلية (كاهوت)</h1>
         <p style="font-size: 18px; color: #7f8c8d;">أطلب من المتسابقين إدخال الرمز التالي في هواتفهم:</p>
@@ -34,34 +35,36 @@
             <h3>اللاعبون المنضمون حالياً (<span id="players-count">0</span>):</h3>
             <div id="players-list"></div>
         </div>
-        <button class="control-btn" id="start-broadcast-btn">ابدأ عرض المسابقة 🚀</button>
+        <button class="control-btn" onclick="startBroadcasting()">ابدأ عرض المسابقة 🚀</button>
     </div>
 
-    <!-- شاشة اللعب وعرض الأسئلة والعداد الكبير للجمهور -->
     <div id="game-screen" class="hidden">
         <div class="timer-big" id="countdown">20</div>
         <div class="question-box" id="question-holder">جاري تحميل السؤال الأول...</div>
         <div class="options-grid" id="options-holder"></div>
-        <button class="control-btn" id="next-question-btn">السؤال التالي ⬅️</button>
+        <button class="control-btn" id="next-btn" onclick="nextQuestion()">السؤال التالي ⬅️</button>
     </div>
 
-    <!-- لوحة الصدارة -->
     <div id="leaderboard-screen" class="hidden">
         <h1>🏆 لوحة الصدارة النهائية 🏆</h1>
         <div class="leaderboard-list" id="leaderboard-content"></div>
-        <button class="control-btn" id="reset-server-btn">إعادة تصفير اللعبة</button>
+        <button class="control-btn" onclick="resetGameServer()">إعادة تصفير اللعبة</button>
     </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://gstatic.com";
-import { getDatabase, ref, onValue, set, get, remove } from "https://gstatic.com";
-
-const firebaseConfig = { databaseURL: "https://firebaseio.com" };
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+<script>
+// تصحيح الرابط والمفاتيح المدمجة لـ Firebase لضمان الربط الفوري
+const firebaseConfig = {
+    apiKey: "AIzaSyDlp5NX_GbR1CPwUVerPaM...",
+    authDomain: "://firebaseapp.com",
+    databaseURL: "https://firebaseio.com",
+    projectId: "tajweed-quiz-challenge"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 const roomPIN = "2026"; 
+document.getElementById('pin-number').innerText = roomPIN;
 
 const questionsBank = [
     { q: "عدد مراحل نزول القرءان الكريم هي:", options: ["مرحلة واحدة", "مرحلتين", "ثلاثة مراحل", "أربعة مراحل"], correct: 2 },
@@ -74,15 +77,9 @@ const questionsBank = [
 let currentIndex = -1;
 let timeLeft = 20;
 let timer = null;
+let currentQuestionActive = false;
 
-document.getElementById('pin-number').innerText = roomPIN;
-
-// ربط الأزرار بشكل مباشر لمنع أخطاء الـ module
-document.getElementById('start-broadcast-btn').addEventListener('click', startBroadcasting);
-document.getElementById('next-question-btn').addEventListener('click', nextQuestion);
-document.getElementById('reset-server-btn').addEventListener('click', resetGameServer);
-
-onValue(ref(db, `rooms/${roomPIN}/players`), (snapshot) => {
+db.ref(`rooms/${roomPIN}/players`).on('value', (snapshot) => {
     const playersData = snapshot.val() || {};
     const listHolder = document.getElementById('players-list');
     listHolder.innerHTML = '';
@@ -107,7 +104,8 @@ function nextQuestion() {
         return;
     }
 
-    set(ref(db, `rooms/${roomPIN}/status`), { currentIndex: currentIndex, state: "active" });
+    currentQuestionActive = true;
+    db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "active" });
 
     const currentQ = questionsBank[currentIndex];
     document.getElementById('question-holder').innerText = `السؤال ${currentIndex + 1}: ${currentQ.q}`;
@@ -127,18 +125,36 @@ function nextQuestion() {
         document.getElementById('countdown').innerText = timeLeft;
         if (timeLeft <= 0) {
             clearInterval(timer);
-            set(ref(db, `rooms/${roomPIN}/status`), { currentIndex: currentIndex, state: "frozen" });
+            currentQuestionActive = false;
+            db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "frozen" });
             document.getElementById('question-holder').innerText += " (انتهى وقت الإجابة 🛑)";
         }
     }, 1000);
 }
 
+db.ref(`rooms/${roomPIN}/answers`).on('child_added', (snapshot) => {
+    if (!currentQuestionActive) return;
+    const ans = snapshot.val();
+    
+    if (ans.qIdx === currentIndex) {
+        const correctAns = questionsBank[currentIndex].correct;
+        if (ans.chosen === correctAns) {
+            const speedBonus = Math.round((timeLeft / 20) * 500);
+            const scoreGained = 500 + speedBonus;
+            
+            db.ref(`rooms/${roomPIN}/players/${ans.pId}/score`).transaction((currentScore) => {
+                return (currentScore || 0) + scoreGained;
+            });
+        }
+    }
+});
+
 function showFinalLeaderboard() {
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('leaderboard-screen').classList.remove('hidden');
-    set(ref(db, `rooms/${roomPIN}/status`), { state: "ended" });
+    db.ref(`rooms/${roomPIN}/status`).set({ state: "ended" });
 
-    get(ref(db, `rooms/${roomPIN}/players`)).then((snapshot) => {
+    db.ref(`rooms/${roomPIN}/players`).once('value', (snapshot) => {
         const players = snapshot.val() || {};
         let sorted = [];
         for (let id in players) { sorted.push(players[id]); }
@@ -153,9 +169,8 @@ function showFinalLeaderboard() {
 }
 
 function resetGameServer() {
-    remove(ref(db, `rooms/${roomPIN}`)).then(() => {
-        location.reload();
-    });
+    db.ref(`rooms/${roomPIN}`).remove();
+    location.reload();
 }
 </script>
 </body>
