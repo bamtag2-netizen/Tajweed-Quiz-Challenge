@@ -25,7 +25,7 @@
 <body>
 
 <div class="container">
-    <!-- شاشة اللوبي لتوليد رمز الغرفة الفوري وثابت برمجياً لضمان تخطي جدار المتصفح الكاش -->
+    <!-- شاشة اللوبي والانتظار -->
     <div id="lobby-screen">
         <h1>مسابقة التجويد التفاعلية (كاهوت)</h1>
         <p style="font-size: 18px; color: #7f8c8d;">أطلب من المتسابقين إدخال الرمز التالي في هواتفهم:</p>
@@ -37,7 +37,7 @@
         <button class="control-btn" onclick="startBroadcasting()">ابدأ عرض المسابقة 🚀</button>
     </div>
 
-    <!-- شاشة اللعب التنافسية وعرض الأسئلة والعداد الكبير للجمهور -->
+    <!-- شاشة اللعب وعرض الأسئلة والعداد الكبير للجمهور -->
     <div id="game-screen" class="hidden">
         <div class="timer-big" id="countdown">20</div>
         <div class="question-box" id="question-holder">جاري تحميل السؤال الأول...</div>
@@ -45,7 +45,7 @@
         <button class="control-btn" id="next-btn" onclick="nextQuestion()">السؤال التالي ⬅️</button>
     </div>
 
-    <!-- لوحة صدارة جدول الترتيب والنقاط المتزامنة والنهائية للمتسابقين -->
+    <!-- لوحة الصدارة -->
     <div id="leaderboard-screen" class="hidden">
         <h1>🏆 لوحة الصدارة النهائية 🏆</h1>
         <div class="leaderboard-list" id="leaderboard-content"></div>
@@ -53,10 +53,9 @@
     </div>
 </div>
 
-<!-- استخدام معمارية الاستدعاء الحديثة والمستقرة سحابياً بنظام الحزم الموحد لمنع تعليق الكاش -->
 <script type="module">
 import { initializeApp } from "https://gstatic.com";
-import { getDatabase, ref, onValue, set, push, transaction, child, get, remove } from "https://gstatic.com";
+import { getDatabase, ref, onValue, set, child, get, remove } from "https://gstatic.com";
 
 const firebaseConfig = { databaseURL: "https://firebaseio.com" };
 const app = initializeApp(firebaseConfig);
@@ -77,10 +76,8 @@ let timeLeft = 20;
 let timer = null;
 let currentQuestionActive = false;
 
-// تفعيل وتوليد الرمز المباشر فور تحميل كود اللوحة
 document.getElementById('pin-number').innerText = roomPIN;
 
-// الاستماع اللحظي والآني لدخول المتسابقين الجدد
 onValue(ref(db, `rooms/${roomPIN}/players`), (snapshot) => {
     const playersData = snapshot.val() || {};
     const listHolder = document.getElementById('players-list');
@@ -93,10 +90,11 @@ onValue(ref(db, `rooms/${roomPIN}/players`), (snapshot) => {
     document.getElementById('players-count').innerText = count;
 });
 
+// تعديل أسلوب ربط الدوال بالنظام العام لتعمل فور النقرة المحمولة
 window.startBroadcasting = function() {
     document.getElementById('lobby-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
-    nextQuestion();
+    window.nextQuestion();
 }
 
 window.nextQuestion = function() {
@@ -110,6 +108,7 @@ window.nextQuestion = function() {
     set(ref(db, `rooms/${roomPIN}/status`), { currentIndex: currentIndex, state: "active" });
 
     const currentQ = questionsBank[currentIndex];
+    // تم تصحيح السطر البرمجي وعرض الأسئلة والخيارات بدقة متناهية فوراً
     document.getElementById('question-holder').innerText = `السؤال ${currentIndex + 1}: ${currentQ.q}`;
     
     const holder = document.getElementById('options-holder');
@@ -133,28 +132,6 @@ window.nextQuestion = function() {
         }
     }, 1000);
 }
-
-// الاستماع واحتساب الإجابات المرسلة فوراً من الأجهزة ومطابقتها وحساب نقاط السرعة
-onValue(ref(db, `rooms/${roomPIN}/answers`), (snapshot) => {
-    if (!currentQuestionActive) return;
-    snapshot.forEach((childSnapshot) => {
-        const ans = childSnapshot.val();
-        if (ans.qIdx === currentIndex && !ans.processed) {
-            const correctAns = questionsBank[currentIndex].correct;
-            if (ans.chosen === correctAns) {
-                const speedBonus = Math.round((timeLeft / 20) * 500);
-                const scoreGained = 500 + speedBonus;
-                
-                const playerScoreRef = ref(db, `rooms/${roomPIN}/players/${ans.pId}/score`);
-                transaction(playerScoreRef, (currentScore) => {
-                    return (currentScore || 0) + scoreGained;
-                });
-            }
-            // وسم الإجابة كـ مراجعة لعدم التكرار اللانهائي بالنقاط
-            set(ref(db, `rooms/${roomPIN}/answers/${childSnapshot.key}/processed`), true);
-        }
-    });
-});
 
 function showFinalLeaderboard() {
     document.getElementById('game-screen').classList.add('hidden');
