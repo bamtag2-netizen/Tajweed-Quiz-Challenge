@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم والمضيف - مسابقة التجويد سحابياً</title>
+    <style>
+        :root { --primary: #2c3e50; --success: #2ecc71; --danger: #e74c3c; --bg: #f5f6fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { max-width: 800px; width: 100%; background: white; padding: 30px; border-radius: 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); text-align: center; }
+        h1 { color: var(--primary); margin-bottom: 10px; }
+        .room-pin { font-size: 32px; font-weight: bold; color: #2980b9; background: #e1f5fe; padding: 10px 20px; border-radius: 8px; display: inline-block; margin: 15px 0; border: 2px dashed #3498db; }
+        .timer-big { font-size: 48px; font-weight: bold; color: #e67e22; background: #fff3e0; width: 110px; height: 110px; line-height: 110px; border-radius: 50%; margin: 20px auto; border: 4px solid #ffb74d; }
+        .question-box { font-size: 26px; font-weight: bold; color: var(--primary); margin: 30px 0; padding: 20px; background: #f8f9fa; border-radius: 8px; }
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .option-display { padding: 20px; font-size: 20px; color: white; border-radius: 10px; text-align: right; font-weight: bold; }
+        .opt-0 { background-color: #e74c3c; } .opt-1 { background-color: #3498db; } .opt-2 { background-color: #f1c40f; color: #2c3e50; } .opt-3 { background-color: #2ecc71; }
+        .control-btn { background: var(--primary); color: white; border: none; padding: 15px 40px; font-size: 18px; border-radius: 8px; cursor: pointer; margin-top: 30px; }
+        .control-btn:hover { background: #34495e; }
+        .hidden { display: none; }
+        .player-tag { display: inline-block; background: #efvh; padding: 8px 15px; margin: 5px; border-radius: 20px; font-weight: bold; background: #dfe4ea; color: #2f3542; }
+        .leaderboard-list { text-align: right; max-width: 400px; margin: 20px auto; font-size: 20px; line-height: 2; }
+    </style>
+    <!-- استدعاء مكتبات Firebase سحابياً وبدقة -->
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
+</head>
+<body>
+
+<div class="container">
+    <!-- شاشة الانتظار ودخول اللاعبين -->
+    <div id="lobby-screen">
+        <h1>مسابقة التجويد التفاعلية (كاهوت)</h1>
+        <p style="font-size: 18px; color: #7f8c8d;">أطلب من المتسابقين إدخال الرمز التالي في هواتفهم:</p>
+        <div class="room-pin">رمز الغرفة: <span id="pin-number">جاري التوليد...</span></div>
+        <div style="margin-top: 20px;">
+            <h3>اللاعبون المنضمون حالياً (<span id="players-count">0</span>):</h3>
+            <div id="players-list"></div>
+        </div>
+        <button class="control-btn" onclick="startBroadcasting()">ابدأ عرض المسابقة 🚀</button>
+    </div>
+
+    <!-- شاشة اللعب والعداد الكبير للجمهور -->
+    <div id="game-screen" class="hidden">
+        <div class="timer-big" id="countdown">20</div>
+        <div class="question-box" id="question-holder">جاري تحميل السؤال...</div>
+        <div class="options-grid" id="options-holder"></div>
+        <button class="control-btn" id="next-btn" onclick="nextQuestion()">السؤال التالي ⬅️</button>
+    </div>
+
+    <!-- شاشة لوحة الصدارة وجدول الترتيب النهائي -->
+    <div id="leaderboard-screen" class="hidden">
+        <h1>🏆 لوحة الصدارة النهائية 🏆</h1>
+        <div class="leaderboard-list" id="leaderboard-content"></div>
+        <button class="control-btn" onclick="resetGameServer()">إعادة تصفير اللعبة</button>
+    </div>
+</div>
+
+<script>
+// إعدادات مشروعك وسيرفرك الشخصي بدقة عالية
+const firebaseConfig = { databaseURL: "https://tajweed-quiz-challenge-default-rtdb.firebaseio.com/" };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const roomPIN = "2026"; // رمز الغرفة ثابت هنا لتسهيل ربط وتوجيه كل الهواتف
+document.getElementById('pin-number').innerText = roomPIN;
+
+const questionsBank = [
+    { q: "عدد مراحل نزول القرءان الكريم هي:", options: ["مرحلة واحدة", "مرحلتين", "ثلاثة مراحل", "أربعة مراحل"], correct: 2 },
+    { q: "أول مراحل نزول القرءان الكريم هي من:", options: ["اللوح المحفوظ إلى السماء الدنيا", "السماء الدنيا على قلب المصطفى", "السماء الدنيا إلى اللوح المحفوظ", "الله عز وجل إلى اللوح المحفوظ"], correct: 3 },
+    { q: "نزل الوحي على رسول الله صلى الله عليه وسلم على مدار:", options: ["سبعة عشر سنة", "ثلاثة وعشرون سنة", "خمسة وعشرون سنة", "اثنان وثلاثون سنة"], correct: 1 },
+    { q: "كان أول نزول القرءان الكريم على قلب المصطفى على حرف:", options: ["قريش", "ثقيف", "تميم", "هوازن"], correct: 0 },
+    { q: "إخراج كل حرف من مخرجه وإعطاؤه حقه ومستحقه من الصفات والأحكام هو:", options: ["التجويد", "الترتيل", "مخارج الحروف", "صفات الحروف"], correct: 0 }
+];
+
+let currentIndex = -1;
+let timeLeft = 20;
+let timer = null;
+let currentQuestionActive = false;
+
+// الاستماع للاعبين الجدد الذين يسجلون دخولهم
+db.ref(`rooms/${roomPIN}/players`).on('value', (snapshot) => {
+    const playersData = snapshot.val() || {};
+    const listHolder = document.getElementById('players-list');
+    listHolder.innerHTML = '';
+    let count = 0;
+    for (let id in playersData) {
+        count++;
+        listHolder.innerHTML += `<span class="player-tag">👤 ${playersData[id].name}</span>`;
+    }
+    document.getElementById('players-count').innerText = count;
+});
+
+function startBroadcasting() {
+    document.getElementById('lobby-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    nextQuestion();
+}
+
+function nextQuestion() {
+    currentIndex++;
+    if (currentIndex >= questionsBank.length) {
+        showFinalLeaderboard();
+        return;
+    }
+
+    currentQuestionActive = true;
+    // تحديث رقم السؤال النشط على السيرفر لتوجيه شاشات الطلاب تلقائياً وايقاظ الأزرار
+    db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "active" });
+
+    const currentQ = questionsBank[currentIndex];
+    document.getElementById('question-holder').innerText = `السؤال ${currentIndex + 1}: ${currentQ.q}`;
+    
+    const holder = document.getElementById('options-holder');
+    holder.innerHTML = '';
+    currentQ.options.forEach((opt, idx) => {
+        holder.innerHTML += `<div class="option-display opt-${idx}">${opt}</div>`;
+    });
+
+    timeLeft = 20;
+    document.getElementById('countdown').innerText = timeLeft;
+    clearInterval(timer);
+    
+    timer = setInterval(() => {
+        timeLeft--;
+        document.getElementById('countdown').innerText = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(timer);
+            currentQuestionActive = false;
+            db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "frozen" });
+            document.getElementById('question-holder').innerText += " (انتهى وقت الإجابة 🛑)";
+        }
+    }, 1000);
+}
+
+// رصد وحساب إجابات المتسابقين بدقة بالاعتماد على السرعة
+db.ref(`rooms/${roomPIN}/answers`).on('child_added', (snapshot) => {
+    if (!currentQuestionActive) return;
+    const ans = snapshot.val();
+    
+    // فحص إذا كانت الإجابة المبعوثة مخصصة للسؤال الحالي ولم تحتسب بعد
+    if (ans.qIdx === currentIndex) {
+        const correctAns = questionsBank[currentIndex].correct;
+        if (ans.chosen === correctAns) {
+            // معادلة كاهوت لحساب السرعة: من يجاوب أسرع ينال نقاطاً أكثر (الحد الأقصى 1000 نقطة)
+            const speedBonus = Math.round((timeLeft / 20) * 500);
+            const scoreGained = 500 + speedBonus;
+            
+            db.ref(`rooms/${roomPIN}/players/${ans.pId}/score`).transaction((currentScore) => {
+                return (currentScore || 0) + scoreGained;
+            });
+        }
+    }
+});
+
+function showFinalLeaderboard() {
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('leaderboard-screen').classList.remove('hidden');
+    db.ref(`rooms/${roomPIN}/status`).set({ state: "ended" });
+
+    db.ref(`rooms/${roomPIN}/players`).once('value', (snapshot) => {
+        const players = snapshot.val() || {};
+        let sorted = [];
+        for (let id in players) { sorted.push(players[id]); }
+        sorted.sort((a,b) => b.score - a.score);
+
+        const board = document.getElementById('leaderboard-content');
+        board.innerHTML = '';
+        sorted.forEach((p, idx) => {
+            board.innerHTML += `<div><strong>المركز ${idx+1}:</strong> ${p.name} ➡️ ✨ ${p.score || 0} نقطة</div>`;
+        });
+    });
+}
+
+function resetGameServer() {
+    db.ref(`rooms/${roomPIN}`).remove();
+    location.reload();
+}
+</script>
+</body>
+</html>
