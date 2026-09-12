@@ -17,50 +17,40 @@
         .hidden { display: none !important; }
         .status-msg { font-size: 24px; font-weight: bold; color: #f1c40f; }
     </style>
+    <!-- استدعاء مكتبات الـ SDK الكلاسيكية المستقرة والفورية الاتصال -->
+    <script src="https://gstatic.com"></script>
+    <script src="https://gstatic.com"></script>
 </head>
 <body>
 
-<!-- شاشة تسجيل الدخول المباشر -->
 <div class="player-container" id="login-zone">
     <h2>انضم للمسابقة التفاعلية 🎮</h2>
     <input type="number" id="room-input" placeholder="أدخل رمز الغرفة PIN">
     <input type="text" id="name-input" placeholder="أدخل اسمك المستعار">
-    <!-- تم إزالة الـ onclick برمجياً لضمان كسر الحظر وتفعيل النقر السريع -->
-    <button class="join-btn" id="submit-login-btn">دخول الغرفة</button>
+    <button class="join-btn" onclick="connectToRoom()">دخول الغرفة</button>
 </div>
 
-<!-- لوحة أزرار الألوان المحدثة برصد النقر المستقل -->
 <div class="pad-grid hidden" id="game-pad">
-    <button class="pad-btn red-btn" id="pad-btn-0"></button>
-    <button class="pad-btn blue-btn" id="btn-opt-blue"></button>
-    <button class="pad-btn yellow-btn" id="btn-opt-yellow"></button>
-    <button class="pad-btn green-btn" id="btn-opt-green"></button>
+    <button class="pad-btn red-btn" onclick="sendAnswer(0)"></button>
+    <button class="pad-btn blue-btn" onclick="sendAnswer(1)"></button>
+    <button class="pad-btn yellow-btn" onclick="sendAnswer(2)"></button>
+    <button class="pad-btn green-btn" onclick="sendAnswer(3)"></button>
 </div>
 
-<!-- شاشة انتظار تبديل الأسئلة الموحدة -->
 <div class="player-container hidden" id="status-zone">
     <div class="status-msg" id="status-text">انتظر المضيف لتجهيز السؤال... ⏳</div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getDatabase, ref, set, push, onValue } from "https://gstatic.com";
-
+<script>
+// إعدادات الربط المباشر بقاعدة البيانات الخاصة بك
 const firebaseConfig = { databaseURL: "https://firebaseio.com" };
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 let myPlayerId = "p_" + Math.random().toString(36).substr(2, 9);
 let currentServerQIdx = -1;
 let registeredPIN = "";
 let playerName = "";
-
-// ربط أحداث النقر عبر الـ EventListener المباشر من المتصفح لكسر العزل وتفعيل الزر فوراً
-document.getElementById('submit-login-btn').addEventListener('click', connectToRoom);
-document.getElementById('pad-btn-0').addEventListener('click', () => sendAnswer(0));
-document.getElementById('btn-opt-blue').addEventListener('click', () => sendAnswer(1));
-document.getElementById('btn-opt-yellow').addEventListener('click', () => sendAnswer(2));
-document.getElementById('btn-opt-green').addEventListener('click', () => sendAnswer(3));
 
 function connectToRoom() {
     registeredPIN = document.getElementById('room-input').value;
@@ -72,16 +62,20 @@ function connectToRoom() {
     }
     if(!playerName) { alert("من فضلك أدخل اسمك المستعار!"); return; }
 
-    set(ref(db, `rooms/${registeredPIN}/players/${myPlayerId}`), { name: playerName, score: 0 });
-
-    document.getElementById('login-zone').classList.add('hidden');
-    document.getElementById('status-zone').classList.remove('hidden');
-
-    listenToGameStatus();
+    // إرسال البيانات فوراً للسيرفر المفتوح
+    db.ref(`rooms/${registeredPIN}/players/${myPlayerId}`).set({ name: playerName, score: 0 })
+    .then(() => {
+        document.getElementById('login-zone').classList.add('hidden');
+        document.getElementById('status-zone').classList.remove('hidden');
+        listenToGameStatus();
+    })
+    .catch((error) => {
+        alert("فشل الاتصال بالسيرفر: " + error.message);
+    });
 }
 
 function listenToGameStatus() {
-    onValue(ref(db, `rooms/${registeredPIN}/status`), (snapshot) => {
+    db.ref(`rooms/${registeredPIN}/status`).on('value', (snapshot) => {
         const status = snapshot.val();
         if (!status) return;
 
@@ -107,11 +101,10 @@ function sendAnswer(buttonIndex) {
     document.getElementById('status-zone').classList.remove('hidden');
     document.getElementById('status-text').innerText = "تم إرسال إجابتك بنجاح! ⚡";
 
-    push(ref(db, `rooms/${registeredPIN}/answers`), {
+    db.ref(`rooms/${registeredPIN}/answers`).push({
         pId: myPlayerId,
         qIdx: currentServerQIdx,
-        chosen: buttonIndex,
-        processed: false
+        chosen: buttonIndex
     });
 }
 </script>
