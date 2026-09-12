@@ -21,17 +21,15 @@
         .player-tag { display: inline-block; padding: 8px 15px; margin: 5px; border-radius: 20px; font-weight: bold; background: #dfe4ea; color: #2f3542; }
         .leaderboard-list { text-align: right; max-width: 400px; margin: 20px auto; font-size: 20px; line-height: 2; }
     </style>
-    <!-- استدعاء مكتبات Firebase سحابياً بشكل متوافق -->
-    <script src="https://gstatic.com"></script>
-    <script src="https://gstatic.com"></script>
 </head>
 <body>
 
 <div class="container">
+    <!-- شاشة اللوبي لتوليد رمز الغرفة الفوري وثابت برمجياً لضمان تخطي جدار المتصفح الكاش -->
     <div id="lobby-screen">
         <h1>مسابقة التجويد التفاعلية (كاهوت)</h1>
         <p style="font-size: 18px; color: #7f8c8d;">أطلب من المتسابقين إدخال الرمز التالي في هواتفهم:</p>
-        <div class="room-pin">رمز الغرفة: <span id="pin-number">جاري الاتصال...</span></div>
+        <div class="room-pin">رمز الغرفة: <span id="pin-number">2026</span></div>
         <div style="margin-top: 20px;">
             <h3>اللاعبون المنضمون حالياً (<span id="players-count">0</span>):</h3>
             <div id="players-list"></div>
@@ -39,13 +37,15 @@
         <button class="control-btn" onclick="startBroadcasting()">ابدأ عرض المسابقة 🚀</button>
     </div>
 
+    <!-- شاشة اللعب التنافسية وعرض الأسئلة والعداد الكبير للجمهور -->
     <div id="game-screen" class="hidden">
         <div class="timer-big" id="countdown">20</div>
-        <div class="question-box" id="question-holder">جاري تحميل السؤال...</div>
+        <div class="question-box" id="question-holder">جاري تحميل السؤال الأول...</div>
         <div class="options-grid" id="options-holder"></div>
         <button class="control-btn" id="next-btn" onclick="nextQuestion()">السؤال التالي ⬅️</button>
     </div>
 
+    <!-- لوحة صدارة جدول الترتيب والنقاط المتزامنة والنهائية للمتسابقين -->
     <div id="leaderboard-screen" class="hidden">
         <h1>🏆 لوحة الصدارة النهائية 🏆</h1>
         <div class="leaderboard-list" id="leaderboard-content"></div>
@@ -53,11 +53,14 @@
     </div>
 </div>
 
-<script>
+<!-- استخدام معمارية الاستدعاء الحديثة والمستقرة سحابياً بنظام الحزم الموحد لمنع تعليق الكاش -->
+<script type="module">
+import { initializeApp } from "https://gstatic.com";
+import { getDatabase, ref, onValue, set, push, transaction, child, get, remove } from "https://gstatic.com";
+
 const firebaseConfig = { databaseURL: "https://firebaseio.com" };
-// إصلاح الحروف الكبيرة للـ SDK للتوصيل الآني الصحيح
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 const roomPIN = "2026"; 
 
@@ -74,10 +77,11 @@ let timeLeft = 20;
 let timer = null;
 let currentQuestionActive = false;
 
-// إظهار الرقم بمجرد تحميل الكود للتأكيد
+// تفعيل وتوليد الرمز المباشر فور تحميل كود اللوحة
 document.getElementById('pin-number').innerText = roomPIN;
 
-db.ref(`rooms/${roomPIN}/players`).on('value', (snapshot) => {
+// الاستماع اللحظي والآني لدخول المتسابقين الجدد
+onValue(ref(db, `rooms/${roomPIN}/players`), (snapshot) => {
     const playersData = snapshot.val() || {};
     const listHolder = document.getElementById('players-list');
     listHolder.innerHTML = '';
@@ -89,13 +93,13 @@ db.ref(`rooms/${roomPIN}/players`).on('value', (snapshot) => {
     document.getElementById('players-count').innerText = count;
 });
 
-function startBroadcasting() {
+window.startBroadcasting = function() {
     document.getElementById('lobby-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
     nextQuestion();
 }
 
-function nextQuestion() {
+window.nextQuestion = function() {
     currentIndex++;
     if (currentIndex >= questionsBank.length) {
         showFinalLeaderboard();
@@ -103,7 +107,7 @@ function nextQuestion() {
     }
 
     currentQuestionActive = true;
-    db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "active" });
+    set(ref(db, `rooms/${roomPIN}/status`), { currentIndex: currentIndex, state: "active" });
 
     const currentQ = questionsBank[currentIndex];
     document.getElementById('question-holder').innerText = `السؤال ${currentIndex + 1}: ${currentQ.q}`;
@@ -124,35 +128,40 @@ function nextQuestion() {
         if (timeLeft <= 0) {
             clearInterval(timer);
             currentQuestionActive = false;
-            db.ref(`rooms/${roomPIN}/status`).set({ currentIndex: currentIndex, state: "frozen" });
+            set(ref(db, `rooms/${roomPIN}/status`), { currentIndex: currentIndex, state: "frozen" });
             document.getElementById('question-holder').innerText += " (انتهى وقت الإجابة 🛑)";
         }
     }, 1000);
 }
 
-db.ref(`rooms/${roomPIN}/answers`).on('child_added', (snapshot) => {
+// الاستماع واحتساب الإجابات المرسلة فوراً من الأجهزة ومطابقتها وحساب نقاط السرعة
+onValue(ref(db, `rooms/${roomPIN}/answers`), (snapshot) => {
     if (!currentQuestionActive) return;
-    const ans = snapshot.val();
-    
-    if (ans.qIdx === currentIndex) {
-        const correctAns = questionsBank[currentIndex].correct;
-        if (ans.chosen === correctAns) {
-            const speedBonus = Math.round((timeLeft / 20) * 500);
-            const scoreGained = 500 + speedBonus;
-            
-            db.ref(`rooms/${roomPIN}/players/${ans.pId}/score`).transaction((currentScore) => {
-                return (currentScore || 0) + scoreGained;
-            });
+    snapshot.forEach((childSnapshot) => {
+        const ans = childSnapshot.val();
+        if (ans.qIdx === currentIndex && !ans.processed) {
+            const correctAns = questionsBank[currentIndex].correct;
+            if (ans.chosen === correctAns) {
+                const speedBonus = Math.round((timeLeft / 20) * 500);
+                const scoreGained = 500 + speedBonus;
+                
+                const playerScoreRef = ref(db, `rooms/${roomPIN}/players/${ans.pId}/score`);
+                transaction(playerScoreRef, (currentScore) => {
+                    return (currentScore || 0) + scoreGained;
+                });
+            }
+            // وسم الإجابة كـ مراجعة لعدم التكرار اللانهائي بالنقاط
+            set(ref(db, `rooms/${roomPIN}/answers/${childSnapshot.key}/processed`), true);
         }
-    }
+    });
 });
 
 function showFinalLeaderboard() {
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('leaderboard-screen').classList.remove('hidden');
-    db.ref(`rooms/${roomPIN}/status`).set({ state: "ended" });
+    set(ref(db, `rooms/${roomPIN}/status`), { state: "ended" });
 
-    db.ref(`rooms/${roomPIN}/players`).once('value', (snapshot) => {
+    get(ref(db, `rooms/${roomPIN}/players`)).then((snapshot) => {
         const players = snapshot.val() || {};
         let sorted = [];
         for (let id in players) { sorted.push(players[id]); }
@@ -166,9 +175,10 @@ function showFinalLeaderboard() {
     });
 }
 
-function resetGameServer() {
-    db.ref(`rooms/${roomPIN}`).remove();
-    location.reload();
+window.resetGameServer = function() {
+    remove(ref(db, `rooms/${roomPIN}`)).then(() => {
+        location.reload();
+    });
 }
 </script>
 </body>
