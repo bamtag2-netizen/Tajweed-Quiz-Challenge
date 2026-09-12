@@ -17,7 +17,6 @@
         .hidden { display: none !important; }
         .status-msg { font-size: 24px; font-weight: bold; color: #f1c40f; }
     </style>
-    <!-- استدعاء مكتبات Firebase سحابياً وبدقة -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
 </head>
@@ -30,7 +29,6 @@
     <button class="join-btn" onclick="connectToRoom()">دخول الغرفة</button>
 </div>
 
-<!-- لوحة أزرار الألوان الصامتة المماثلة لكاهوت -->
 <div class="pad-grid hidden" id="game-pad">
     <button class="pad-btn red-btn" onclick="sendAnswer(0)"></button>
     <button class="pad-btn blue-btn" onclick="sendAnswer(1)"></button>
@@ -38,13 +36,12 @@
     <button class="pad-btn green-btn" onclick="sendAnswer(3)"></button>
 </div>
 
-<!-- شاشة انتظار تبديل الأسئلة -->
 <div class="player-container hidden" id="status-zone">
     <div class="status-msg" id="status-text">انتظر المضيف لتجهيز السؤال... ⏳</div>
 </div>
 
 <script>
-const firebaseConfig = { databaseURL: "https://tajweed-quiz-challenge-default-rtdb.firebaseio.com/" };
+const firebaseConfig = { databaseURL: "https://firebaseio.com" };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -58,12 +55,11 @@ function connectToRoom() {
     playerName = document.getElementById('name-input').value;
 
     if(registeredPIN !== "2026") {
-        alert("رمز الغرفة غير صحيح! يرجى إدخال الرمز المعروض على شاشة المضيف.");
+        alert("رمز الغرفة غير صحيح!");
         return;
     }
     if(!playerName) { alert("من فضلك أدخل اسمك المستعار!"); return; }
 
-    // إنشاء وحفظ بيانات اللاعب داخل الغرفة
     db.ref(`rooms/${registeredPIN}/players/${myPlayerId}`).set({ name: playerName, score: 0 });
 
     document.getElementById('login-zone').classList.add('hidden');
@@ -73,20 +69,17 @@ function connectToRoom() {
 }
 
 function listenToGameStatus() {
-    // مراقبة شاشة المضيف لمعرفة حالة السؤال الحالي وفتح الأزرار تلقائياً
     db.ref(`rooms/${registeredPIN}/status`).on('value', (snapshot) => {
         const status = snapshot.val();
         if (!status) return;
 
         if (status.state === "active" && status.currentIndex !== currentServerQIdx) {
             currentServerQIdx = status.currentIndex;
-            // تفعيل الأزرار وإظهارها فوراً عندما يفتح المضيف سؤالاً جديداً
             document.getElementById('status-zone').classList.add('hidden');
             document.getElementById('game-pad').classList.remove('hidden');
             const buttons = document.querySelectorAll('.pad-btn');
             buttons.forEach(btn => btn.disabled = false);
         } else if (status.state === "frozen" || status.state === "ended") {
-            // قفل وإخفاء الأزرار عند انتهاء وقت الإجابة
             document.getElementById('game-pad').classList.add('hidden');
             document.getElementById('status-zone').classList.remove('hidden');
             document.getElementById('status-text').innerText = status.state === "ended" ? "انتهت المسابقة بالكامل! 🎉" : "انتهى وقت الإجابة! طالع الشاشة الرئيسية...🛑";
@@ -95,7 +88,6 @@ function listenToGameStatus() {
 }
 
 function sendAnswer(buttonIndex) {
-    // قفل سريع للأزرار محلياً لمنع التعديل والالتزام بالقوانين
     const buttons = document.querySelectorAll('.pad-btn');
     buttons.forEach(btn => btn.disabled = true);
 
@@ -103,7 +95,6 @@ function sendAnswer(buttonIndex) {
     document.getElementById('status-zone').classList.remove('hidden');
     document.getElementById('status-text').innerText = "تم إرسال إجابتك بنجاح! ⚡";
 
-    // إرسال الإجابة فوراً للسيرفر متضمنة معيار السرعة
     db.ref(`rooms/${registeredPIN}/answers`).push({
         pId: myPlayerId,
         qIdx: currentServerQIdx,
