@@ -17,7 +17,6 @@
         .hidden { display: none !important; }
         .status-msg { font-size: 24px; font-weight: bold; color: #f1c40f; }
     </style>
-    <!-- استدعاء مكتبات الـ SDK الكلاسيكية المستقرة والفورية الاتصال -->
     <script src="https://gstatic.com"></script>
     <script src="https://gstatic.com"></script>
 </head>
@@ -42,8 +41,13 @@
 </div>
 
 <script>
-// إعدادات الربط المباشر بقاعدة البيانات الخاصة بك
-const firebaseConfig = { databaseURL: "https://firebaseio.com" };
+// دمج إعدادات التطبيق الكامل ليتطابق يقيناً مع المضيف
+const firebaseConfig = {
+    apiKey: "AIzaSyDlp5NX_GbR1CPwUVerPaM...",
+    authDomain: "://firebaseapp.com",
+    databaseURL: "https://firebaseio.com",
+    projectId: "tajweed-quiz-challenge"
+};
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
@@ -62,7 +66,6 @@ function connectToRoom() {
     }
     if(!playerName) { alert("من فضلك أدخل اسمك المستعار!"); return; }
 
-    // إرسال البيانات فوراً للسيرفر المفتوح
     db.ref(`rooms/${registeredPIN}/players/${myPlayerId}`).set({ name: playerName, score: 0 })
     .then(() => {
         document.getElementById('login-zone').classList.add('hidden');
